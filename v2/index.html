@@ -1,0 +1,464 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <script>
+      try {
+        document.querySelector('meta[name="color-scheme"]').content =
+          localStorage.getItem('color-scheme') ?? 'light dark';
+      } catch {}
+    </script>
+    <title>Widrow-Hoff Lab V2 — Simulador Interativo</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="header-inner">
+        <div class="brand-group">
+          <span class="brand-badge">V2 INTERATIVA</span>
+          <div>
+            <h1 class="app-title">Método de Widrow-Hoff (Regra Delta / α-LMS)</h1>
+            <p class="app-subtitle">
+              Laboratório visual passo a passo · Evolução do projeto TP1-P1 (2023)
+            </p>
+          </div>
+        </div>
+
+        <nav class="header-actions" aria-label="Ações principais">
+          <a class="btn-link" href="../index.html">Ver V1 Original</a>
+          <button type="button" class="btn" id="openHelpBtn">
+            Fórmulas &amp; História
+          </button>
+          <button
+            type="button"
+            class="btn"
+            id="themeToggleBtn"
+            aria-label="Alternar tema claro ou escuro"
+          >
+            <span class="theme-label-dark">Modo Escuro</span>
+            <span class="theme-label-light">Modo Claro</span>
+          </button>
+        </nav>
+      </div>
+    </header>
+
+    <main class="app-main">
+      <!-- Coluna Esquerda: Dataset + Parâmetros -->
+      <section class="column" aria-label="Configuração e dados de entrada">
+        <article class="card card-enter">
+          <div class="card-header">
+            <h2 class="card-title">1. Conjunto de Dados</h2>
+            <span class="pill pill-idle tabular-nums" id="datasetCountBadge">0 amostras</span>
+          </div>
+
+          <div class="field" style="margin-bottom: 0.75rem">
+            <label for="presetSelect">Dataset pré-configurado</label>
+            <select id="presetSelect"></select>
+          </div>
+          <p class="card-desc" id="presetDescription"></p>
+
+          <form id="addSampleForm" novalidate>
+            <div class="form-grid" style="margin-bottom: 0.65rem">
+              <div class="field">
+                <label for="inputX1" id="labelX1">X₁</label>
+                <input
+                  id="inputX1"
+                  type="number"
+                  step="any"
+                  required
+                  placeholder="Ex: 25"
+                  data-error="inputX1-error"
+                />
+                <div id="inputX1-error" class="error-msg">
+                  Informe um número válido para X₁.
+                </div>
+              </div>
+              <div class="field">
+                <label for="inputX2" id="labelX2">X₂</label>
+                <input
+                  id="inputX2"
+                  type="number"
+                  step="any"
+                  required
+                  placeholder="Ex: 34"
+                  data-error="inputX2-error"
+                />
+                <div id="inputX2-error" class="error-msg">
+                  Informe um número válido para X₂.
+                </div>
+              </div>
+            </div>
+
+            <div class="field" style="margin-bottom: 0.75rem">
+              <label>Alvo desejado (T)</label>
+              <div class="radio-row">
+                <label class="radio-pill">
+                  <input type="radio" name="targetRadio" value="1" checked />
+                  <span id="targetPosLabel">+1</span>
+                </label>
+                <label class="radio-pill">
+                  <input type="radio" name="targetRadio" value="-1" />
+                  <span id="targetNegLabel">-1</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="toolbar">
+              <button type="submit" class="btn btn-primary">Adicionar Amostra</button>
+              <button type="button" class="btn" id="importCsvBtn">Importar CSV</button>
+              <button type="button" class="btn" id="exportCsvBtn">Exportar CSV</button>
+              <button type="button" class="btn btn-danger" id="clearTableBtn">
+                Limpar
+              </button>
+              <input
+                type="file"
+                id="csvFileInput"
+                accept=".csv,text/csv,text/plain"
+                class="visually-hidden"
+              />
+            </div>
+          </form>
+
+          <div
+            id="datasetAlert"
+            class="alert-banner"
+            style="margin-top: 0.75rem"
+            hidden
+          ></div>
+
+          <div
+            tabindex="0"
+            role="region"
+            aria-labelledby="dataTableCaption"
+            class="table-wrapper"
+          >
+            <table class="data-table">
+              <caption id="dataTableCaption" class="visually-hidden">
+                Tabela editável de amostras de treinamento (X₁, X₂, T)
+              </caption>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th id="thX1">X₁</th>
+                  <th id="thX2">X₂</th>
+                  <th>Alvo (T)</th>
+                  <th>Predição</th>
+                  <th>Ação</th>
+                </tr>
+              </thead>
+              <tbody id="datasetBody"></tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="card card-enter">
+          <div class="card-header">
+            <h2 class="card-title">2. Hiperparâmetros</h2>
+            <button type="button" class="btn" id="restoreParamsBtn">
+              Restaurar Padrão
+            </button>
+          </div>
+
+          <form id="paramsForm" novalidate>
+            <div class="field" style="margin-bottom: 0.75rem">
+              <label for="paramRule">Regra de Atualização</label>
+              <select id="paramRule">
+                <option value="normalized-lms">
+                  Widrow-Hoff Normalizado (α-LMS · Igual à V1)
+                </option>
+                <option value="standard-lms">
+                  ADALINE / LMS Padrão (sem divisão por ‖x‖²)
+                </option>
+              </select>
+            </div>
+
+            <div class="form-grid-3">
+              <div class="field">
+                <label for="paramX0">X₀ (Bias)</label>
+                <input id="paramX0" type="number" step="any" required data-error="paramX0-err" />
+                <div id="paramX0-err" class="error-msg">X₀ inválido.</div>
+              </div>
+              <div class="field">
+                <label for="paramW0">w₀ inicial</label>
+                <input id="paramW0" type="number" step="any" required data-error="paramW0-err" />
+                <div id="paramW0-err" class="error-msg">w₀ inválido.</div>
+              </div>
+              <div class="field">
+                <label for="paramW1">w₁ inicial</label>
+                <input id="paramW1" type="number" step="any" required data-error="paramW1-err" />
+                <div id="paramW1-err" class="error-msg">w₁ inválido.</div>
+              </div>
+              <div class="field">
+                <label for="paramW2">w₂ inicial</label>
+                <input id="paramW2" type="number" step="any" required data-error="paramW2-err" />
+                <div id="paramW2-err" class="error-msg">w₂ inválido.</div>
+              </div>
+              <div class="field">
+                <label for="paramAlfa">α (Taxa)</label>
+                <input
+                  id="paramAlfa"
+                  type="number"
+                  step="any"
+                  min="0.000001"
+                  required
+                  data-error="paramAlfa-err"
+                />
+                <div id="paramAlfa-err" class="error-msg">α deve ser &gt; 0.</div>
+              </div>
+              <div class="field">
+                <label for="paramMaxTrain">MaxTrain</label>
+                <input
+                  id="paramMaxTrain"
+                  type="number"
+                  step="1"
+                  min="1"
+                  max="200000"
+                  required
+                  data-error="paramMaxTrain-err"
+                />
+                <div id="paramMaxTrain-err" class="error-msg">Inteiro ≥ 1.</div>
+              </div>
+            </div>
+          </form>
+
+          <div
+            id="paramsAlert"
+            class="alert-banner"
+            style="margin-top: 0.75rem"
+            hidden
+          ></div>
+        </article>
+      </section>
+
+      <!-- Coluna Direita: Controles, KPIs, Gráficos e Inspetor -->
+      <section class="column" aria-label="Simulador e visualizações">
+        <article class="card card-enter">
+          <div class="playback-bar">
+            <div class="playback-controls">
+              <button type="button" class="btn btn-primary" id="runAllBtn">
+                Executar Tudo
+              </button>
+              <button type="button" class="btn" id="playPauseBtn">Play</button>
+              <button type="button" class="btn" id="stepEpochBtn">Próx. Época</button>
+              <button type="button" class="btn" id="stepSampleBtn">Próx. Amostra</button>
+              <button type="button" class="btn" id="resetBtn">Resetar</button>
+            </div>
+
+            <div class="playback-speed">
+              <label for="playModeSelect">
+                Animação:
+                <select id="playModeSelect" style="min-height: 34px; border-radius: 8px; padding: 0.2rem 0.4rem;">
+                  <option value="epoch">Por época</option>
+                  <option value="sample">Por amostra</option>
+                </select>
+              </label>
+              <label for="speedRange">
+                Velocidade: <span id="speedValue" class="tabular-nums">20</span>/s
+                <input id="speedRange" type="range" min="1" max="60" value="20" />
+              </label>
+            </div>
+          </div>
+
+          <div class="kpi-grid" style="margin-top: 0.9rem">
+            <div class="kpi-tile">
+              <div class="kpi-label">Época / Estado</div>
+              <div class="kpi-value tabular-nums" id="kpiEpoch">0</div>
+              <div class="kpi-sub">
+                <span class="pill pill-idle" id="kpiStatus">Pronto</span>
+              </div>
+            </div>
+
+            <div class="kpi-tile">
+              <div class="kpi-label">Acurácia (Pós-Época)</div>
+              <div class="kpi-value tabular-nums" id="kpiAccuracy">0 / 0</div>
+              <div class="kpi-sub tabular-nums" id="kpiOnlineHits">Online na época: —</div>
+            </div>
+
+            <div class="kpi-tile">
+              <div class="kpi-label">MSE (Erro Médio²)</div>
+              <div class="kpi-value tabular-nums" id="kpiMse">—</div>
+              <div class="kpi-sub" id="kpiRuleLabel">α-LMS Normalizado</div>
+            </div>
+
+            <div class="kpi-tile">
+              <div class="kpi-label">Pesos (w₀, w₁, w₂)</div>
+              <div class="kpi-value mono" style="font-size: 0.86rem" id="kpiWeights">
+                0, 0, 0
+              </div>
+              <div class="kpi-sub mono" id="kpiEquation">Reta indefinida</div>
+            </div>
+          </div>
+        </article>
+
+        <div class="visual-grid">
+          <article class="card card-enter">
+            <div class="card-header">
+              <h2 class="card-title">3. Espaço 2D &amp; Fronteira de Decisão</h2>
+              <div class="toolbar">
+                <label style="font-size: 0.8rem">
+                  Clique no gráfico:
+                  <select id="canvasModeSelect" style="min-height: 32px; border-radius: 8px; padding: 0.15rem 0.4rem;">
+                    <option value="probe">Testar ponto</option>
+                    <option value="addPos">Adicionar +1</option>
+                    <option value="addNeg">Adicionar -1</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+
+            <div class="toolbar" style="margin-bottom: 0.65rem; font-size: 0.8rem">
+              <label>
+                <input type="checkbox" id="toggleRegions" checked />
+                Colorir semiplanos (+1 / -1)
+              </label>
+              <label>
+                <input type="checkbox" id="toggleNormal" checked />
+                Mostrar vetor normal (w₁, w₂)
+              </label>
+            </div>
+
+            <div class="canvas-box">
+              <canvas
+                id="scatterCanvas"
+                class="scatter-canvas"
+                aria-label="Gráfico de dispersão 2D com reta de decisão do algoritmo Widrow-Hoff"
+              ></canvas>
+              <div id="scatterTooltip" class="canvas-tooltip tabular-nums" hidden></div>
+            </div>
+
+            <div class="legend-row">
+              <span class="legend-item">
+                <span class="swatch" style="background: var(--pos)"></span>
+                <span id="legendPos">Classe +1</span>
+              </span>
+              <span class="legend-item">
+                <span class="swatch swatch-diamond" style="background: var(--neg)"></span>
+                <span id="legendNeg">Classe -1</span>
+              </span>
+              <span class="legend-item">
+                <span class="swatch swatch-line" style="background: var(--warn)"></span>
+                Fronteira (s = 0)
+              </span>
+              <span class="legend-item">
+                <span class="swatch" style="border: 2px solid var(--danger); background: transparent"></span>
+                Erro atual
+              </span>
+              <span class="legend-item">
+                <span class="swatch" style="background: #db2777"></span>
+                Ponto testado (★)
+              </span>
+            </div>
+          </article>
+
+          <article class="card card-enter">
+            <div class="card-header">
+              <h2 class="card-title">4. Inspetor Passo a Passo</h2>
+              <span class="pill pill-idle tabular-nums" id="stepBadge">Aguardando</span>
+            </div>
+
+            <div class="math-box mono tabular-nums" id="mathInspector">
+              <p class="card-desc" style="margin: 0">
+                Clique em <strong>Próx. Amostra</strong> ou <strong>Play (Por amostra)</strong>
+                para ver cada substituição numérica de <code class="mono">s</code>,
+                <code class="mono">e = t - s</code> e <code class="mono">Δw</code> em tempo real.
+              </p>
+            </div>
+
+            <div style="margin-top: 1rem">
+              <h3 class="card-title" style="font-size: 0.94rem; margin-bottom: 0.5rem">
+                5. Testar Novo Ponto (Predição)
+              </h3>
+              <div class="form-grid">
+                <div class="field">
+                  <label for="probeX1" id="probeLabelX1">X₁ para teste</label>
+                  <input id="probeX1" type="number" step="any" placeholder="Ex: 15" />
+                </div>
+                <div class="field">
+                  <label for="probeX2" id="probeLabelX2">X₂ para teste</label>
+                  <input id="probeX2" type="number" step="any" placeholder="Ex: 39" />
+                </div>
+              </div>
+              <div class="predict-result" id="predictResult">
+                <span class="card-desc" style="margin: 0">
+                  Digite coordenadas ou clique no gráfico para classificar um ponto.
+                </span>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <article class="card card-enter">
+          <div class="card-header">
+            <h2 class="card-title">6. Curva de Convergência (MSE &amp; Acurácia)</h2>
+            <div class="legend-row" style="margin-top: 0">
+              <span class="legend-item">
+                <span class="swatch swatch-line" style="background: var(--danger)"></span>
+                MSE (esquerda)
+              </span>
+              <span class="legend-item">
+                <span class="swatch swatch-line" style="background: var(--pos)"></span>
+                Acurácia % (direita)
+              </span>
+            </div>
+          </div>
+
+          <div class="canvas-box">
+            <canvas
+              id="convergenceCanvas"
+              class="convergence-canvas"
+              aria-label="Gráfico de evolução do Erro Quadrático Médio e Acurácia por época"
+            ></canvas>
+          </div>
+        </article>
+
+        <article class="card card-enter">
+          <div class="card-header">
+            <h2 class="card-title">7. Log de Épocas</h2>
+            <span class="card-desc" style="margin: 0" id="logSummary">
+              Exibindo últimas épocas executadas
+            </span>
+          </div>
+          <ul class="log-list tabular-nums" id="logList"></ul>
+        </article>
+      </section>
+    </main>
+
+    <dialog id="helpDialog" closedby="any" aria-labelledby="helpDialogTitle">
+      <div class="dialog-header">
+        <h1 id="helpDialogTitle" style="font-size: 1.2rem">
+          Sobre o Algoritmo Widrow-Hoff &amp; Projeto TP1-2023
+        </h1>
+        <form method="dialog">
+          <button class="btn" value="close" autofocus>Fechar</button>
+        </form>
+      </div>
+
+      <p>
+        Este simulador é a <strong>V2</strong> de um trabalho de faculdade de 2023
+        (<em>Exercício TP1-P1</em>, desenvolvido por Geovanne Pelozone Nery e Luiz Ricardo Favaro)
+        criado originalmente em HTML/JS puro sem apoio de LLMs para comparar a implementação
+        própria do método de <strong>Widrow-Hoff</strong> com o aplicativo <em>NeuroFURG</em>.
+      </p>
+
+      <h2 style="font-size: 1rem; margin: 0.9rem 0 0.4rem">Fórmulas da Regra α-LMS (V1 &amp; V2)</h2>
+      <div class="formula-block">
+        s = w₀·x₀ + w₁·x₁ + w₂·x₂<br />
+        ŷ = +1 se s &gt; 0, senão -1<br />
+        e = t - s<br />
+        ‖x‖² = x₀² + x₁² + x₂²<br />
+        wᵢ ← wᵢ + α · e · (xᵢ / ‖x‖²) &nbsp;&nbsp;[Widrow-Hoff Normalizado]
+      </div>
+
+      <p style="margin-top: 0.75rem; font-size: 0.9rem; color: var(--text-muted)">
+        <strong>Por que o XOR não converge?</strong> Um único neurônio linear (ADALINE /
+        Widrow-Hoff) separa o plano por uma única reta. Como os pontos do XOR (+1 em (0,1),(1,0)
+        e -1 em (0,0),(1,1)) não são linearmente separáveis, o treinamento oscila até atingir
+        <code>MaxTrain</code>.
+      </p>
+    </dialog>
+
+    <script type="module" src="./src/app.js"></script>
+  </body>
+</html>
